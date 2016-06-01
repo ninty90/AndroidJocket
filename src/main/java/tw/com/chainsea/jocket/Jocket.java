@@ -17,9 +17,11 @@ import tw.com.chainsea.jocket.websocket.WebSocketClient;
  * Created by 90Chris on 2016/5/25.
  */
 public class Jocket {
-    private static String PING_PACK = "{\"type\":\"ping\"}";
-    private static String PONG_PACK = "{\"type\":\"pong\"}";
-    private static String OPEN_PACK = "{\"type\":\"open\"}";
+    private final static String PING_PACK = "{\"type\":\"ping\"}";
+    private final static String PONG_PACK = "{\"type\":\"pong\"}";
+    private final static String OPEN_PACK = "{\"type\":\"open\"}";
+    private final static String NOOP_PACK = "{\"type\":\"noop\"}";
+    private final static String CLOSE_PACK = "{\"type\":\"close\"}";
 
     private static Jocket sJocket = null;
     private OnJocketListener mJocketListener = null;
@@ -39,14 +41,26 @@ public class Jocket {
         header.put("Referer", "Android");
     }
 
+    /**
+     *
+     * @param url url without scheme
+     * @param listener Jocket listener
+     */
     public void connect(String url, OnJocketListener listener){
         mUrl = url;
         mJocketListener = listener;
-        String prepareUrl = mUrl + ".jocket_prepare";
+        String prepareUrl = "http://" + mUrl + ".jocket_prepare";
 
         DaVinci.with().getHttpRequest()
                 .headers(header)
                 .doPost(prepareUrl, (String) null, new PrepareListener());
+    }
+
+    public void close() {
+        DaVinci.with()
+                .getHttpRequest()
+                .headers(header)
+                .doPost(pollingUrl, CLOSE_PACK, null);
     }
 
     private class PrepareListener implements OnDaVinciRequestListener {
@@ -56,7 +70,8 @@ public class Jocket {
             try {
                 JSONObject jsonObject = new JSONObject(s);
                 mSessionId = jsonObject.getString("sessionId");
-                tryWebSocket();
+                //tryWebSocket();
+                tryPolling();
             } catch (JSONException e) {
                 VinciLog.e("session id parse", e);
                 mJocketListener.onDisconnect();
@@ -72,8 +87,8 @@ public class Jocket {
 
     WebSocketClient socketClient;
     private void tryWebSocket() {
-        URI uri = URI.create(mUrl);
-        String wsUrl = "ws://" + uri.getHost() + "?jocket_sid=" + mSessionId;
+        String wsUrl = "ws://" + mUrl + "?jocket_sid=" + mSessionId;
+        VinciLog.d("trying websocket connection: " + wsUrl);
         socketClient = new WebSocketClient(URI.create(wsUrl), new WebsocketListener(), null);
         socketClient.connect();
     }
@@ -81,35 +96,59 @@ public class Jocket {
     String pollingUrl;
     private void tryPolling() {
         socketClient = null;
-        DaVinci.with().getHttpRequest()
-                .timeOut(35000)
-                .headers(header)
-                .doGet(mUrl, null, new PollingListener());
-        pollingUrl = mUrl + ".jocket_polling?jocket_sid=" + mSessionId;
+        VinciLog.d("websocket connection failed." );
+        pollingUrl = "http://" + mUrl + ".jocket_polling?jocket_sid=" + mSessionId;
+        VinciLog.d("trying polling connection: " + pollingUrl);
+
+        polling();
+
         DaVinci.with()
                 .getHttpRequest()
                 .headers(header)
                 .doPost(pollingUrl, PING_PACK, null);
     }
 
+    private void polling() {
+        DaVinci.with().getHttpRequest()
+                .timeOut(35000)
+                .headers(header)
+                .doGet(pollingUrl, null, new PollingListener());
+    }
+
     private class PollingListener implements OnDaVinciRequestListener {
 
         @Override
         public void onDaVinciRequestSuccess(String s) {
-            if (s.equals(PONG_PACK)) {
-                VinciLog.i("polling connected");
-                DaVinci.with().getHttpRequest()
-                        .headers(header)
-                        .doPost(pollingUrl, OPEN_PACK, null);
-            } else {
-                mJocketListener.onReceive(s);
+            try {
+                JSONObject jsonObject = new JSONObject(s);
+                String type = jsonObject.getString("type");
+                switch (type) {
+                    case "close":
+                        break;
+                    case "pong":
+                        VinciLog.i("pong received");
+                        mJocketListener.onConnected();
+                        DaVinci.with().getHttpRequest()
+                                .headers(header)
+                                .doPost(pollingUrl, OPEN_PACK, null);
+                        polling();
+                        break;
+                    case "noop":
+                        polling();
+                        break;
+                    default:
+                        mJocketListener.onReceive(s);
+                        polling();
+                        break;
+                }
+            } catch (JSONException e) {
+                VinciLog.e("parse json error", e);
             }
         }
 
         @Override
         public void onDaVinciRequestFailed(String s) {
-            VinciLog.e("polling connected failed, reason = " + s);
-            mJocketListener.onDisconnect();
+            VinciLog.e("polling failed, failed reason = " + s);
         }
     }
 
@@ -132,16 +171,18 @@ public class Jocket {
 
         @Override
         public void onMessage(byte[] data) {
-            tryPolling();
+            VinciLog.i("websocket onMessage");
         }
 
         @Override
         public void onDisconnect(int code, String reason) {
+            VinciLog.i("websocket onDisconnect");
             tryPolling();
         }
 
         @Override
         public void onError(Exception error) {
+            VinciLog.i("websocket onError");
             tryPolling();
         }
     }

@@ -37,7 +37,6 @@ public class WebSocketClient {
     private Listener                 mListener;
     private Socket mSocket;
     private Thread mThread;
-    private HandlerThread mHandlerThread;
     private Handler mHandler;
     private Map<String, String> mExtraHeaders;
     private HybiParser mParser;
@@ -56,7 +55,7 @@ public class WebSocketClient {
         mExtraHeaders = extraHeaders;
         mParser       = new HybiParser(this);
 
-        mHandlerThread = new HandlerThread("websocket-thread");
+        HandlerThread mHandlerThread = new HandlerThread("websocket-thread");
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
     }
@@ -87,6 +86,7 @@ public class WebSocketClient {
                     URI origin = new URI(originScheme, "//" + mURI.getHost(), null);
 
                     SocketFactory factory = mURI.getScheme().equals("wss") ? getSSLSocketFactory() : SocketFactory.getDefault();
+                    VinciLog.d("connect, host:" + mURI.getHost() + ", port:" + port);
                     mSocket = factory.createSocket(mURI.getHost(), port);
 
                     PrintWriter out = new PrintWriter(mSocket.getOutputStream());
@@ -104,6 +104,7 @@ public class WebSocketClient {
                     }
                     out.print("\r\n");
                     out.flush();
+                    VinciLog.e(out.toString());
 
                     HybiParser.HappyDataInputStream stream = new HybiParser.HappyDataInputStream(mSocket.getInputStream());
 
@@ -151,8 +152,9 @@ public class WebSocketClient {
                     VinciLog.e("Websocket SSL error!", ex);
                     mListener.onDisconnect(0, "SSL");
 
-                } catch (Exception ex) {
-                    mListener.onError(ex);
+                } catch (Exception e) {
+                    VinciLog.e( "Other Exception!", e);
+                    mListener.onError(e);
                 }
             }
         });
@@ -248,6 +250,7 @@ public class WebSocketClient {
                     }
                 } catch (IOException e) {
                     mListener.onError(e);
+                    VinciLog.e("send frame failed", e);
                 }
             }
         });

@@ -40,8 +40,9 @@ import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.List;
 
+import cn.hadcn.davinci.base.VinciLog;
+
 public class HybiParser {
-    private static final String TAG = "HybiParser";
 
     private WebSocketClient mClient;
 
@@ -196,7 +197,7 @@ public class HybiParser {
     private byte[] frame(Object data, int opcode, int errorCode) {
         if (mClosed) return null;
 
-        Log.d(TAG, "Creating frame for: " + data + " op: " + opcode + " err: " + errorCode);
+        VinciLog.d("Creating frame for: " + data + " op: " + opcode + " err: " + errorCode);
 
         byte[] buffer = (data instanceof String) ? decode((String) data) : (byte[]) data;
         int insert = (errorCode > 0) ? 2 : 0;
@@ -293,17 +294,17 @@ public class HybiParser {
         } else if (opcode == OP_CLOSE) {
             int    code   = (payload.length >= 2) ? 256 * payload[0] + payload[1] : 0;
             String reason = (payload.length >  2) ? encode(slice(payload, 2))     : null;
-            Log.d(TAG, "Got close op! " + code + " " + reason);
+            VinciLog.d("Got close op! " + code + " " + reason);
             mClient.getListener().onDisconnect(code, reason);
 
         } else if (opcode == OP_PING) {
             if (payload.length > 125) { throw new ProtocolError("Ping payload too large"); }
-            Log.d(TAG, "Sending pong!!");
+            VinciLog.d("Sending pong!!");
             mClient.sendFrame(frame(payload, OP_PONG, -1));
 
         } else if (opcode == OP_PONG) {
             String message = encode(payload);
-            Log.d(TAG, "Got pong! " + message);
+            VinciLog.d("Got pong! " + message);
         }
     }
 
