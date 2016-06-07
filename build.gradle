@@ -22,6 +22,5 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:23.3.0'
-    compile files('libs/org.apache.http.legacy.jar')
-    compile 'com.github.CPPAlien:DaVinci:-SNAPSHOT'
+    compile 'com.github.CPPAlien:DaVinci:1.1.7'
 }
