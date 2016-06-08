@@ -6,6 +6,7 @@ import org.json.JSONObject;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
+import java.util.TimerTask;
 
 import cn.hadcn.davinci.DaVinci;
 import cn.hadcn.davinci.base.VinciLog;
@@ -51,6 +52,12 @@ public class Jocket {
                 .doGet(prepareUrl, map, new PrepareListener());
     }
 
+    public void send(JSONObject jsonObject) {
+        DaVinci.with().getHttpRequest()
+                .headers(header)
+                .doPost(pollingUrl, jsonObject, null);
+    }
+
     private class PrepareListener implements OnDaVinciRequestListener {
 
         @Override
@@ -78,13 +85,21 @@ public class Jocket {
     private void tryPolling() {
         pollingUrl = "http://" + mBaseUrl + "/jocket?s=" + mSessionId;
         VinciLog.d("trying polling connection: " + pollingUrl);
+        timer = new Timer();
+        timer.schedule(new PingTask(), 0, mPingInterval);
+    }
 
-        DaVinci.with()
-                .getHttpRequest()
-                .headers(header)
-                .doPost(pollingUrl, PING_PACK, null);
+    private class PingTask extends TimerTask {
 
-        polling();
+        @Override
+        public void run() {
+            DaVinci.with()
+                    .getHttpRequest()
+                    .headers(header)
+                    .doPost(pollingUrl, PING_PACK, null);
+
+            polling();
+        }
     }
 
     private void polling() {
@@ -95,12 +110,13 @@ public class Jocket {
     }
 
     public void close() {
-        timer.cancel();
-        timer.purge();
         DaVinci.with()
                 .getHttpRequest()
                 .headers(header)
                 .doPost(pollingUrl, CLOSE_PACK, null);
+        timer.cancel();
+        timer.purge();
+        timer = null;
     }
 
     private class PollingListener implements OnDaVinciRequestListener {
@@ -112,7 +128,9 @@ public class Jocket {
                 String type = jsonObject.getString("type");
                 switch (type) {
                     case "close":
-                        mJocketListener.onDisconnect("connection closed");
+                        JSONObject data = jsonObject.getJSONObject("data");
+                        mJocketListener.onDisconnect(data.getString("message"));
+                        close();
                         break;
                     case "pong":
                         VinciLog.i("pong received");
