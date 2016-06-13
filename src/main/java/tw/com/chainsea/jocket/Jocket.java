@@ -85,8 +85,15 @@ public class Jocket {
     private void tryPolling() {
         pollingUrl = "http://" + mBaseUrl + "/jocket?s=" + mSessionId;
         VinciLog.d("trying polling connection: " + pollingUrl);
+
+        DaVinci.with()
+                .getHttpRequest()
+                .headers(header)
+                .doPost(pollingUrl, PING_PACK, null);
+        polling();
+
         timer = new Timer();
-        timer.schedule(new PingTask(), 0, mPingInterval);
+        timer.schedule(new PingTask(), mPingInterval, mPingInterval);
     }
 
     private class PingTask extends TimerTask {
@@ -97,7 +104,6 @@ public class Jocket {
                     .getHttpRequest()
                     .headers(header)
                     .doPost(pollingUrl, PING_PACK, null);
-
             polling();
         }
     }
@@ -135,13 +141,13 @@ public class Jocket {
                     case "pong":
                         VinciLog.i("pong received");
                         mJocketListener.onConnected();
-                        DaVinci.with().getHttpRequest()
+                        /*DaVinci.with().getHttpRequest()
                                 .headers(header)
-                                .doPost(pollingUrl, OPEN_PACK, null);
+                                .doPost(pollingUrl, OPEN_PACK, null);*/
                         polling();
                         break;
                     case "noop":
-                        polling();
+                        VinciLog.i("noop received");
                         break;
                     default:
                         mJocketListener.onReceive(s);
