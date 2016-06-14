@@ -3,6 +3,7 @@ package tw.com.chainsea.jocket;
 import android.test.AndroidTestCase;
 
 import cn.hadcn.davinci.DaVinci;
+import cn.hadcn.davinci.base.LogLevel;
 
 /**
  * jocket test
@@ -14,14 +15,14 @@ public class JocketTest extends AndroidTestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        DaVinci.init(true, "JocketTest", getContext());
+        DaVinci.init(LogLevel.DEBUG, "JocketTest", getContext());
         jocket = new Jocket("127.0.0.1:12821/ecp");
     }
 
     public void testJocketConnection() throws Exception {
         jocket.connect("/jocket/mobile", null, new OnJocketListener() {
             @Override
-            public void onDisconnect(String reason) {
+            public void onDisconnect(ErrCode code, String reason) {
 
             }
 

@@ -5,7 +5,7 @@ package tw.com.chainsea.jocket;
  * Created by 90Chris on 2016/5/25.
  */
 public interface OnJocketListener {
-    void onDisconnect(String reason);
+    void onDisconnect(ErrCode code, String reason);
     void onConnected();
     void onReceive(String msg);
 }
