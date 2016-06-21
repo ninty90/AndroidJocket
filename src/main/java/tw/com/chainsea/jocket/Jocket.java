@@ -151,7 +151,7 @@ public class Jocket {
                         polling();
                         break;
                     case "noop":
-                        VinciLog.i("noop received");
+                        VinciLog.d("noop received");
                         break;
                     default:
                         mJocketListener.onReceive(s);
