@@ -9,7 +9,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import cn.hadcn.davinci.DaVinci;
-import cn.hadcn.davinci.base.VinciLog;
+import cn.hadcn.davinci.log.VinciLog;
 import cn.hadcn.davinci.http.OnDaVinciRequestListener;
 
 /**
@@ -154,8 +154,9 @@ public class Jocket {
                         VinciLog.d("noop received");
                         break;
                     default:
-                        mJocketListener.onReceive(s);
                         polling();
+                        mJocketListener.onReceive(s);
+
                         break;
                 }
             } catch (JSONException e) {
@@ -170,6 +171,4 @@ public class Jocket {
             close();
         }
     }
-
-
 }
