@@ -35,6 +35,7 @@ public class Jocket {
         mBaseUrl = baseUrl;
         header = new HashMap<>();
         header.put("Referer", "Android");
+        DaVinci.with().addThreadPool("polling", 1);
     }
 
     /**
@@ -109,7 +110,8 @@ public class Jocket {
     }
 
     private void polling() {
-        DaVinci.with().getHttpRequest()
+        DaVinci.with().tag("polling")
+                .getHttpRequest()
                 .timeOut(mPingTimeout)
                 .headers(header)
                 .doGet(pollingUrl, null, new PollingListener());
@@ -143,12 +145,12 @@ public class Jocket {
                         close();
                         break;
                     case "pong":
+                        polling();
                         VinciLog.i("pong received");
                         mJocketListener.onConnected();
                         /*DaVinci.with().getHttpRequest()
                                 .headers(header)
                                 .doPost(pollingUrl, OPEN_PACK, null);*/
-                        polling();
                         break;
                     case "noop":
                         VinciLog.d("noop received");
