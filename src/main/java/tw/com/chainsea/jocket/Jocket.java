@@ -76,7 +76,7 @@ public class Jocket {
         }
 
         @Override
-        public void onDaVinciRequestFailed(String s) {
+        public void onDaVinciRequestFailed(int code, String s) {
             VinciLog.e("prepare failed, reason = " + s);
             mJocketListener.onDisconnect(ErrCode.SYSTEM_ERR, "prepare failed");
         }
@@ -167,7 +167,7 @@ public class Jocket {
         }
 
         @Override
-        public void onDaVinciRequestFailed(String s) {
+        public void onDaVinciRequestFailed(int code ,String s) {
             VinciLog.e("polling failed, failed reason = " + s);
             mJocketListener.onDisconnect(ErrCode.SYSTEM_ERR, s);
             close();
