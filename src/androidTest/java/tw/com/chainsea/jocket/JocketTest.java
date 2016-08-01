@@ -22,7 +22,7 @@ public class JocketTest extends AndroidTestCase {
     public void testJocketConnection() throws Exception {
         jocket.connect("/jocket/mobile", null, new OnJocketListener() {
             @Override
-            public void onDisconnect(ErrCode code, String reason) {
+            public void onDisconnect(JocketCode code, String reason) {
 
             }
 

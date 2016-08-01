@@ -4,13 +4,13 @@ package tw.com.chainsea.jocket;
  * error code
  * Created by 90Chris on 2016/6/14.
  */
-public enum ErrCode {
+public enum JocketCode {
     UNDEF(-1),
     SYSTEM_ERR(0),
     INVALID_TOKEN(4901);
 
     private int mValue;
-    ErrCode(int value){
+    JocketCode(int value){
         mValue = value;
     }
 
@@ -18,8 +18,8 @@ public enum ErrCode {
         return mValue;
     }
 
-    public static ErrCode ofValue(int value) {
-        for ( ErrCode code : values()) {
+    public static JocketCode ofValue(int value) {
+        for ( JocketCode code : values()) {
             if ( code.getValue() == value ) {
                 return code;
             }

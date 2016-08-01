@@ -71,14 +71,14 @@ public class Jocket {
                 tryPolling();
             } catch (JSONException e) {
                 VinciLog.e("Prepare json parse", e);
-                mJocketListener.onDisconnect(ErrCode.SYSTEM_ERR, "json parse error");
+                mJocketListener.onDisconnect(JocketCode.SYSTEM_ERR, "json parse error");
             }
         }
 
         @Override
         public void onDaVinciRequestFailed(int code, String s) {
             VinciLog.e("prepare failed, reason = " + s);
-            mJocketListener.onDisconnect(ErrCode.SYSTEM_ERR, "prepare failed");
+            mJocketListener.onDisconnect(JocketCode.SYSTEM_ERR, "prepare failed");
         }
     }
 
@@ -141,7 +141,7 @@ public class Jocket {
                          */
                         String data = jsonObject.getString("data");
                         JSONObject dataJson = new JSONObject(data);
-                        mJocketListener.onDisconnect(ErrCode.ofValue(dataJson.getInt("code")), dataJson.getString("message"));
+                        mJocketListener.onDisconnect(JocketCode.ofValue(dataJson.getInt("code")), dataJson.getString("message"));
                         close();
                         break;
                     case "pong":
@@ -169,7 +169,7 @@ public class Jocket {
         @Override
         public void onDaVinciRequestFailed(int code ,String s) {
             VinciLog.e("polling failed, failed reason = " + s);
-            mJocketListener.onDisconnect(ErrCode.SYSTEM_ERR, s);
+            mJocketListener.onDisconnect(JocketCode.SYSTEM_ERR, s);
             close();
         }
     }
