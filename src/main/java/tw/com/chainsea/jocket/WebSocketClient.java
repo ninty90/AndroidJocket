@@ -145,10 +145,6 @@ public class WebSocketClient {
                     mListener.onConnect();
 
                     // Now decode websocket frames.
-                    String line1;
-                    while (!TextUtils.isEmpty(line1 = readLine(stream))) {
-                        Log.i(TAG, line);
-                    }
                     mParser.start(stream);
 
                 } catch (EOFException ex) {

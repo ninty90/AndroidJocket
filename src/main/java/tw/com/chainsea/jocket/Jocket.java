@@ -36,7 +36,7 @@ public class Jocket {
     private WebSocketClient mWebSocketClient;
     private boolean isWebSocketOK = false;
 
-    public Jocket(String baseUrl){
+    public Jocket(String baseUrl) {
         mBaseUrl = baseUrl;
         header = new HashMap<>();
         header.put("Referer", "Android");
@@ -82,7 +82,7 @@ public class Jocket {
                 tryPolling();
 
                 if ( upgrade ) {
-                    String wsUrl = "http://" + mBaseUrl + "/jocket-ws?s=" + mSessionId;
+                    String wsUrl = "ws://" + mBaseUrl + "/jocket-ws?s=" + mSessionId;
                     mWebSocketClient = new WebSocketClient(URI.create(wsUrl), new WebSocketListener(), header);
                     mWebSocketClient.connect();
                 }
