@@ -123,6 +123,7 @@ public class Jocket {
                         close();
                         break;
                     case "pong":
+                        if ( isWebSocketOK ) return;
                         VinciLog.i("pong received, protocol upgrade to websocket success");
                         mJocketListener.onConnected();
 
@@ -148,7 +149,8 @@ public class Jocket {
 
         @Override
         public void onDisconnect(int code, String reason) {
-            VinciLog.e("onDisconnect = " + reason);
+            mJocketListener.onDisconnect(JocketCode.ofValue(code), reason);
+            VinciLog.e("onDisconnect = " + code + ", reason = " + reason, new Exception());
         }
 
         @Override

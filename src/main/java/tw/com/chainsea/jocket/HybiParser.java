@@ -1,37 +1,4 @@
-//
-// HybiParser.java: draft-ietf-hybi-thewebsocketprotocol-13 parser
-//
-// Based on code from the faye project.
-// https://github.com/faye/faye-websocket-node
-// Copyright (c) 2009-2012 James Coglan
-//
-// Ported from Javascript to Java by Eric Butler <eric@codebutler.com>
-//
-// (The MIT License)
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 package tw.com.chainsea.jocket;
-
-import android.text.TextUtils;
-import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -41,9 +8,9 @@ import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.List;
 
-public class HybiParser {
-    private static final String TAG = "HybiParser";
+import cn.hadcn.davinci.log.VinciLog;
 
+public class HybiParser {
     private WebSocketClient mClient;
 
     private boolean mMasking = true;
@@ -198,7 +165,7 @@ public class HybiParser {
     private byte[] frame(Object data, int opcode, int errorCode) {
         if (mClosed) return null;
 
-        Log.d(TAG, "Creating frame for: " + data + " op: " + opcode + " err: " + errorCode);
+        VinciLog.d("Creating frame for: " + data + " op: " + opcode + " err: " + errorCode);
 
         byte[] buffer = (data instanceof String) ? decode((String) data) : (byte[]) data;
         int insert = (errorCode > 0) ? 2 : 0;
@@ -295,17 +262,17 @@ public class HybiParser {
         } else if (opcode == OP_CLOSE) {
             int    code   = (payload.length >= 2) ? 256 * payload[0] + payload[1] : 0;
             String reason = (payload.length >  2) ? encode(slice(payload, 2))     : null;
-            Log.d(TAG, "Got close op! " + code + " " + reason);
+            VinciLog.d("Got close op! " + code + " " + reason);
             mClient.getListener().onDisconnect(code, reason);
 
         } else if (opcode == OP_PING) {
             if (payload.length > 125) { throw new ProtocolError("Ping payload too large"); }
-            Log.d(TAG, "Sending pong!!");
+            VinciLog.d("Sending pong!!");
             mClient.sendFrame(frame(payload, OP_PONG, -1));
 
         } else if (opcode == OP_PONG) {
             String message = encode(payload);
-            Log.d(TAG, "Got pong! " + message);
+            VinciLog.d("Got pong! " + message);
         }
     }
 

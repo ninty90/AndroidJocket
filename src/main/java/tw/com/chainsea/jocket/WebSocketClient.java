@@ -17,7 +17,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.net.HttpURLConnection;
 import java.net.Socket;
 import java.net.URI;
 import java.security.KeyManagementException;
@@ -108,11 +107,8 @@ public class WebSocketClient {
 
                     HybiParser.HappyDataInputStream stream = new HybiParser.HappyDataInputStream(mSocket.getInputStream());
 
-
                     // Read HTTP response status line.
-                    String firstLine = readLine(stream);
-                    Log.i(TAG, firstLine);
-                    StatusLine statusLine = parseStatusLine(firstLine);
+                    StatusLine statusLine = parseStatusLine(readLine(stream));
                     if (statusLine == null) {
                         throw new HttpException("Received no reply from server.");
                     } else if (statusLine.getStatusCode() != HttpStatus.SC_SWITCHING_PROTOCOLS) {
@@ -124,7 +120,6 @@ public class WebSocketClient {
                     boolean validated = false;
 
                     while (!TextUtils.isEmpty(line = readLine(stream))) {
-                        Log.i(TAG, line);
                         Header header = parseHeader(line);
                         if (header.getName().equals("Sec-WebSocket-Accept")) {
                             String expected = createSecretValidation(secret);
@@ -143,7 +138,6 @@ public class WebSocketClient {
                     }
 
                     mListener.onConnect();
-
                     // Now decode websocket frames.
                     mParser.start(stream);
 
@@ -157,7 +151,6 @@ public class WebSocketClient {
                     mListener.onDisconnect(0, "SSL");
 
                 } catch (Exception ex) {
-                    Log.d(TAG, "Websocket Exception!", ex);
                     mListener.onError(ex);
                 }
             }
