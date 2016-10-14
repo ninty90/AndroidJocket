@@ -1,17 +1,20 @@
 package tw.com.chainsea.jocket;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.text.TextUtils;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.UUID;
 
 import cn.hadcn.davinci.DaVinci;
-import cn.hadcn.davinci.log.VinciLog;
 import cn.hadcn.davinci.http.OnDaVinciRequestListener;
+import cn.hadcn.davinci.log.VinciLog;
 
 /**
  * Jocket
@@ -19,22 +22,36 @@ import cn.hadcn.davinci.http.OnDaVinciRequestListener;
  */
 public class Jocket {
     private final static String PING_PACK = "{\"type\":\"ping\"}";
-    private final static String PONG_PACK = "{\"type\":\"pong\"}";
-    private final static String OPEN_PACK = "{\"type\":\"open\"}";
-    private final static String NOOP_PACK = "{\"type\":\"noop\"}";
-    private final static String CLOSE_PACK = "{\"type\":\"close\"}";
-    private final static String UPGRADE_PACK = "{\"type\":\"upgrade\"}";
-
+    private String mSessionId;
+    private boolean isClosed = false;
+    private boolean isFirstHandshake = true;
     private OnJocketListener mJocketListener = null;
-    private String mSessionId = null;
     private int mPingTimeout;
     private int mPingInterval;
     private Map<String, String> header;
     private String mBaseUrl;
-    private Timer pollingTimer;
-    private Timer webSocketTimer;
-    private WebSocketClient mWebSocketClient;
-    private boolean isWebSocketOK = false;
+    private String pollingUrl;
+    private static final int SEND_PING = 0;
+    private static final int DISCONNECT = 1;
+    private static final int NOOP_POLL = 2;
+    private final Handler mHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            switch (msg.what) {
+                case SEND_PING:
+                    sendPing();
+                    break;
+                case DISCONNECT:
+                    disconnect(JocketCode.JOCKET_FAILED, "no pong", true);
+                    break;
+                case NOOP_POLL:
+                    poll();
+                    break;
+
+            }
+        }
+    };
 
     public Jocket(String baseUrl) {
         mBaseUrl = baseUrl;
@@ -45,208 +62,107 @@ public class Jocket {
 
     /**
      * connect
-     * @param path path, like /chat/simple
-     * @param map args
+     *
+     * @param path     path, like /chat/simple
+     * @param map      args
      * @param listener Jocket listener
      */
-    public void connect(String path, Map<String, Object> map, OnJocketListener listener){
+    public void connect(String path, Map<String, Object> map, OnJocketListener listener) {
         mJocketListener = listener;
         String prepareUrl = "http://" + mBaseUrl + path + ".jocket";
-
+        VinciLog.d("[jocket] prepare url: " + prepareUrl + " map: " + map);
         DaVinci.with().getHttpRequest()
                 .headers(header)
+                .maxRetries(0)
+                .timeOut(10000)
+                .shouldCache(false)
                 .doGet(prepareUrl, map, new PrepareListener());
-    }
-
-    public void send(JSONObject jsonObject) {
-        if ( isWebSocketOK ) {
-            mWebSocketClient.send(jsonObject.toString());
-        } else {
-            DaVinci.with().getHttpRequest()
-                    .headers(header)
-                    .doPost(pollingUrl, jsonObject, null);
-        }
     }
 
     private class PrepareListener implements OnDaVinciRequestListener {
 
         @Override
         public void onDaVinciRequestSuccess(String s) {
+            VinciLog.e("[jocket] prepare received = " + s);
             try {
                 JSONObject jsonObject = new JSONObject(s);
                 mSessionId = jsonObject.getString("sessionId");
                 mPingTimeout = jsonObject.getInt("pingTimeout");
                 mPingInterval = jsonObject.getInt("pingInterval");
-                boolean upgrade = jsonObject.getBoolean("upgrade");
-
-                tryPolling();
-
-                if ( upgrade ) {
-                    String wsUrl = "ws://" + mBaseUrl + "/jocket-ws?s=" + mSessionId;
-                    mWebSocketClient = new WebSocketClient(URI.create(wsUrl), new WebSocketListener(), header);
-                    mWebSocketClient.connect();
-                }
+//                boolean upgrade = jsonObject.getBoolean("upgrade");
+                pollingUrl = "http://" + mBaseUrl + "/jocket?s=" + mSessionId;
+                sendPing();
+                poll();
             } catch (JSONException e) {
-                VinciLog.e("Prepare json parse", e);
-                mJocketListener.onDisconnect(JocketCode.SYSTEM_ERR, "json parse error");
+                VinciLog.e("[jocket] prepare json parse", e);
+                disconnect(JocketCode.SYSTEM_ERR, "prepare json parse error", false);
             }
         }
 
         @Override
-        public void onDaVinciRequestFailed(int code, String s) {
-            VinciLog.e("prepare failed, reason = " + s);
-            mJocketListener.onDisconnect(JocketCode.SYSTEM_ERR, "prepare failed");
+        public void onDaVinciRequestFailed(int i, String s) {
+            VinciLog.e("[jocket] prepare failed, reason = " + s + ",isClosed: " + isClosed);
+            disconnect(JocketCode.JOCKET_FAILED, "prepare failed", false);
         }
     }
 
-    private class WebSocketListener implements WebSocketClient.Listener {
-
-        @Override
-        public void onConnect() {
-            VinciLog.d("WebSocket connect, try to upgrade protocol");
-            mWebSocketClient.send(PING_PACK);
-        }
-
-        @Override
-        public void onMessage(String message) {
-            try {
-                JSONObject jsonObject = new JSONObject(message);
-                String type = jsonObject.getString("type");
-                switch (type) {
-                    case "close":
-                        /**
-                         * {"message":"invalid token","code":4901}
-                         */
-                        String data = jsonObject.getString("data");
-                        JSONObject dataJson = new JSONObject(data);
-                        mJocketListener.onDisconnect(JocketCode.ofValue(dataJson.getInt("code")), dataJson.getString("message"));
-                        close();
-                        break;
-                    case "pong":
-                        if ( isWebSocketOK ) return;
-                        VinciLog.i("pong received, protocol upgrade to websocket success");
-                        mJocketListener.onConnected();
-
-                        tryWebSocket();
-                        break;
-                    case "noop":
-                        VinciLog.d("noop received");
-                        break;
-                    default:
-                        mJocketListener.onReceive(message);
-
-                        break;
-                }
-            } catch (JSONException e) {
-                VinciLog.e("parse json error", e);
-            }
-        }
-
-        @Override
-        public void onMessage(byte[] data) {
-
-        }
-
-        @Override
-        public void onDisconnect(int code, String reason) {
-            mJocketListener.onDisconnect(JocketCode.ofValue(code), reason);
-            VinciLog.e("onDisconnect = " + code + ", reason = " + reason, new Exception());
-        }
-
-        @Override
-        public void onError(Exception error) {
-            VinciLog.e("onError = " + error.getMessage());
-        }
-    }
-
-    String pollingUrl;
-    private void tryPolling() {
-        pollingUrl = "http://" + mBaseUrl + "/jocket?s=" + mSessionId;
-        VinciLog.d("trying polling connection: " + pollingUrl);
-
-        DaVinci.with()
-                .getHttpRequest()
-                .headers(header)
-                .doPost(pollingUrl, PING_PACK, null);
-        polling();
-
-        pollingTimer = new Timer();
-        pollingTimer.schedule(new PingTask(), mPingInterval, mPingInterval);
-    }
-
-
-    private void tryWebSocket() {
-        mWebSocketClient.send(UPGRADE_PACK);
-        isWebSocketOK = true;
-
-        webSocketTimer = new Timer();
-        webSocketTimer.schedule(new WebSocketPingTask(), mPingInterval, mPingInterval);
-    }
-
-    private class WebSocketPingTask extends TimerTask {
-
-        @Override
-        public void run() {
-            mWebSocketClient.send(PING_PACK);
-        }
-    }
-
-    private class PingTask extends TimerTask {
-
-        @Override
-        public void run() {
-            DaVinci.with()
-                    .getHttpRequest()
-                    .headers(header)
-                    .doPost(pollingUrl, PING_PACK, null);
-            polling();
-        }
-    }
-
-    private void polling() {
-        if ( isWebSocketOK ) {
-            if ( pollingTimer != null ) {
-                pollingTimer.cancel();
-                pollingTimer.purge();
-                pollingTimer = null;
-            }
+    private void sendPing() {
+        if (isClosed) {
             return;
         }
-
-        DaVinci.with().tag("polling")
+        UUID uuid = UUID.randomUUID();
+        String url = pollingUrl + "&uuid=" + uuid;
+        VinciLog.d("[jocket][" + mSessionId + "] do ping, url = " + url);
+        DaVinci.with()
                 .getHttpRequest()
                 .timeOut(mPingTimeout)
                 .headers(header)
-                .doGet(pollingUrl, null, new PollingListener());
+                .maxRetries(0)
+                .shouldCache(false)
+                .doPost(url, PING_PACK, new OnDaVinciRequestListener() {
+                    @Override
+                    public void onDaVinciRequestSuccess(String s) {
+                        VinciLog.e("[jocket][" + mSessionId + "] ping success " + s);
+                        if (TextUtils.isEmpty(s)) {
+                            disconnect(JocketCode.JOCKET_FAILED, "ping failed", false);
+                            VinciLog.e("[jocket][" + mSessionId + "] ping response is empty");
+                        }
+                    }
+
+                    @Override
+                    public void onDaVinciRequestFailed(int i, String s) {
+                        VinciLog.e("[jocket][" + mSessionId + "] ping failed, " + s);
+                        disconnect(JocketCode.JOCKET_FAILED, "ping failed", true);
+                    }
+                });
+        mHandler.sendEmptyMessageDelayed(DISCONNECT, mPingTimeout);
     }
 
-    public void close() {
-        if ( isWebSocketOK ) {
-            mWebSocketClient.send(CLOSE_PACK);
-            if ( webSocketTimer != null ) {
-                webSocketTimer.cancel();
-                webSocketTimer.purge();
-                webSocketTimer = null;
-            }
+    private void poll() {
+        if (isClosed) {
             return;
         }
-
-        DaVinci.with()
+        UUID uuid = UUID.randomUUID();
+        String url = pollingUrl + "&uuid=" + uuid;
+        VinciLog.d("[jocket][" + mSessionId + "] do poll, url = " + url);
+        DaVinci.with().tag("polling")
                 .getHttpRequest()
+                .timeOut(60000)
+                .maxRetries(0)
                 .headers(header)
-                .doPost(pollingUrl, CLOSE_PACK, null);
-        if ( pollingTimer != null ) {
-            pollingTimer.cancel();
-            pollingTimer.purge();
-            pollingTimer = null;
-        }
+                .shouldCache(false)
+                .doGet(url, null, new PollingListener());
     }
 
     private class PollingListener implements OnDaVinciRequestListener {
 
         @Override
         public void onDaVinciRequestSuccess(String s) {
+            if (isClosed) {
+                return;
+            }
             try {
+                VinciLog.d("[jocket][" + mSessionId + "] poll success result:　" + s);
                 JSONObject jsonObject = new JSONObject(s);
                 String type = jsonObject.getString("type");
                 switch (type) {
@@ -256,36 +172,86 @@ public class Jocket {
                          */
                         String data = jsonObject.getString("data");
                         JSONObject dataJson = new JSONObject(data);
-                        mJocketListener.onDisconnect(JocketCode.ofValue(dataJson.getInt("code")), dataJson.getString("message"));
-                        close();
+                        disconnect(JocketCode.ofValue(dataJson.getInt("code")), dataJson.getString("message"), false);
+                        VinciLog.d("[jocket][" + mSessionId + "] close received");
                         break;
                     case "pong":
-                        polling();
-                        VinciLog.i("pong received");
-                        mJocketListener.onConnected();
-                        /*DaVinci.with().getHttpRequest()
-                                .headers(header)
-                                .doPost(pollingUrl, OPEN_PACK, null);*/
+                        mHandler.removeMessages(DISCONNECT);
+                        poll();
+                        VinciLog.i("[jocket][" + mSessionId + "] pong received");
+                        if (isFirstHandshake) {
+                            VinciLog.i("[jocket][" + mSessionId + "] connected");
+                            isFirstHandshake = false;
+                            mJocketListener.onConnected();
+                        }
+                        mHandler.sendEmptyMessageDelayed(SEND_PING, mPingInterval);
                         break;
                     case "noop":
-                        VinciLog.d("noop received");
+
+                        mHandler.sendEmptyMessageDelayed(NOOP_POLL, 5000);
+                        VinciLog.d("[jocket][" + mSessionId + "] noop received");
+                        break;
+                    case "message":
+                        poll();
+                        mJocketListener.onReceive(s);
                         break;
                     default:
-                        polling();
-                        mJocketListener.onReceive(s);
-
+                        VinciLog.e("[jocket][" + mSessionId + "] invalid packet type:" + type);
                         break;
                 }
             } catch (JSONException e) {
-                VinciLog.e("parse json error", e);
+                VinciLog.e("[jocket][" + mSessionId + "] poll parse json error", e);
+                disconnect(JocketCode.SYSTEM_ERR, "poll json parse error", true);
             }
         }
 
         @Override
-        public void onDaVinciRequestFailed(int code ,String s) {
-            VinciLog.e("polling failed, failed reason = " + s);
-            mJocketListener.onDisconnect(JocketCode.SYSTEM_ERR, s);
-            close();
+        public void onDaVinciRequestFailed(int i, String s) {
+            VinciLog.e("[jocket][" + mSessionId + "] poll failed, failed reason = " + s);
+            disconnect(JocketCode.JOCKET_FAILED, "poll failed", true);
+        }
+    }
+
+    public void close() {
+        disconnect(JocketCode.JOCKET_NORMAL, "closed by user", true);
+    }
+
+    private void disconnect(JocketCode code, String reason, boolean isSendClose) {
+        VinciLog.e("[jocket][" + mSessionId + "] disconnect, code = " + code.getValue() + ", reason = " + reason + ", isClosed = " + isClosed);
+        if (isClosed) {
+            return;
+        }
+        isClosed = true;
+        mHandler.removeCallbacksAndMessages(null);
+        mJocketListener.onDisconnect(code, reason);
+        if (isSendClose) {
+            JSONObject jsonObject = new JSONObject();
+            try {
+                JSONObject data = new JSONObject();
+                data.put("code", code.getValue());
+                data.put("reason", reason);
+                jsonObject.put("type", "close");
+                jsonObject.put("data", data.toString());
+            } catch (JSONException e) {
+                VinciLog.e("json assembler failed");
+            }
+            UUID uuid = UUID.randomUUID();
+            String url = pollingUrl + "&uuid=" + uuid;
+            DaVinci.with()
+                    .getHttpRequest()
+                    .headers(header)
+                    .shouldCache(false)
+                    .doPost(url, jsonObject, new OnDaVinciRequestListener() {
+                        @Override
+                        public void onDaVinciRequestSuccess(String s) {
+                            VinciLog.e("[jocket][" + mSessionId + "] close success, " + s);
+                        }
+
+                        @Override
+                        public void onDaVinciRequestFailed(int i, String s) {
+                            VinciLog.e("[jocket][" + mSessionId + "] close failed");
+                        }
+                    });
         }
     }
 }

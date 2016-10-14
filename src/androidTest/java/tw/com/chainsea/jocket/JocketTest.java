@@ -3,7 +3,7 @@ package tw.com.chainsea.jocket;
 import android.test.AndroidTestCase;
 
 import cn.hadcn.davinci.DaVinci;
-import cn.hadcn.davinci.base.LogLevel;
+import cn.hadcn.davinci.log.LogLevel;
 
 /**
  * jocket test

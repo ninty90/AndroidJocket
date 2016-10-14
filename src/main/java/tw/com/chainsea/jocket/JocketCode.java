@@ -7,6 +7,8 @@ package tw.com.chainsea.jocket;
 public enum JocketCode {
     UNDEF(-1),
     SYSTEM_ERR(0),
+    JOCKET_FAILED(3604),
+    JOCKET_NORMAL(1000),
     INVALID_TOKEN(4901);
 
     private int mValue;
