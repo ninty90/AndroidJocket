@@ -8,7 +8,7 @@ android {
         minSdkVersion 10
         targetSdkVersion 23
         versionCode 1
-        versionName "1.0"
+        versionName "2.0.0.0"
     }
     buildTypes {
         release {
@@ -21,7 +21,7 @@ android {
 dependencies {
     compile fileTree(include: ['*.jar'], dir: 'libs')
     testCompile 'junit:junit:4.12'
-    compile 'com.android.support:appcompat-v7:23.3.0'
+    compile 'com.android.support:appcompat-v7:23.+'
     compile files('libs/org.apache.http.legacy.jar')
-    compile 'com.github.ninty90:Davinci:1.4.0'
+    compile 'com.github.ninty90:DaVinci:1.4.0'
 }

@@ -2,6 +2,9 @@ package tw.com.chainsea.jocket;
 
 import android.test.AndroidTestCase;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import cn.hadcn.davinci.DaVinci;
 import cn.hadcn.davinci.log.LogLevel;
 
@@ -16,11 +19,13 @@ public class JocketTest extends AndroidTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         DaVinci.init(LogLevel.DEBUG, "JocketTest", getContext());
-        jocket = new Jocket("127.0.0.1:12821/ecp");
+        jocket = new Jocket("ce.topnology.com.cn:12721/ce");
     }
 
     public void testJocketConnection() throws Exception {
-        jocket.connect("/jocket/mobile", null, new OnJocketListener() {
+        Map<String, Object> header = new HashMap<>();
+        header.put("Referer", "Android");
+        jocket.connect("/jocket/mobile", header, new OnJocketListener() {
             @Override
             public void onDisconnect(JocketCode code, String reason) {
 

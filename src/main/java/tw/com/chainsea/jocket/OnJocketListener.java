@@ -6,6 +6,8 @@ package tw.com.chainsea.jocket;
  */
 public interface OnJocketListener {
     void onDisconnect(JocketCode code, String reason);
+
     void onConnected();
+
     void onReceive(String msg);
 }

@@ -8,7 +8,10 @@ import android.text.TextUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,6 +25,7 @@ import cn.hadcn.davinci.log.VinciLog;
  */
 public class Jocket {
     private final static String PING_PACK = "{\"type\":\"ping\"}";
+    private static final String PROTOCOL = "http://";
     private String mSessionId;
     private boolean isClosed = false;
     private boolean isFirstHandshake = true;
@@ -30,7 +34,6 @@ public class Jocket {
     private int mPingInterval;
     private Map<String, String> header;
     private String mBaseUrl;
-    private String pollingUrl;
     private static final int SEND_PING = 0;
     private static final int DISCONNECT = 1;
     private static final int NOOP_POLL = 2;
@@ -48,28 +51,39 @@ public class Jocket {
                 case NOOP_POLL:
                     poll();
                     break;
-
             }
         }
     };
+    private String pollingUrl;
 
     public Jocket(String baseUrl) {
         mBaseUrl = baseUrl;
         header = new HashMap<>();
         header.put("Referer", "Android");
-        DaVinci.with().addThreadPool("polling", 1);
+        DaVinci.with().addThreadPool("polling", 3);
+    }
+
+    public void send(JSONObject jsonObject) {
+//        if ( isWebSocketOK ) {
+//            mWebSocketClient.send(jsonObject.toString());
+//        } else {
+            DaVinci.with().getHttpRequest()
+                    .headers(header)
+                    .doPost(pollingUrl, jsonObject, null);
+//        }
     }
 
     /**
-     * connect
-     *
      * @param path     path, like /chat/simple
      * @param map      args
      * @param listener Jocket listener
      */
     public void connect(String path, Map<String, Object> map, OnJocketListener listener) {
         mJocketListener = listener;
-        String prepareUrl = "http://" + mBaseUrl + path + ".jocket";
+        UUID uuid = UUID.randomUUID();
+        String prepareUrl = PROTOCOL + mBaseUrl + path + ".jocket";
+        map.put("uuid", uuid);
+        map.put("time", getData());
         VinciLog.d("[jocket] prepare url: " + prepareUrl + " map: " + map);
         DaVinci.with().getHttpRequest()
                 .headers(header)
@@ -90,7 +104,12 @@ public class Jocket {
                 mPingTimeout = jsonObject.getInt("pingTimeout");
                 mPingInterval = jsonObject.getInt("pingInterval");
 //                boolean upgrade = jsonObject.getBoolean("upgrade");
-                pollingUrl = "http://" + mBaseUrl + "/jocket?s=" + mSessionId;
+//                if ( upgrade ) {
+//                    String wsUrl = "ws://" + mBaseUrl + "/jocket-ws?s=" + mSessionId;
+//                    mWebSocketClient = new WebSocketClient(URI.create(wsUrl), new WebSocketListener(), header);
+//                    mWebSocketClient.connect();
+//                }
+                pollingUrl = PROTOCOL + mBaseUrl + "/jocket?s=" + mSessionId;
                 sendPing();
                 poll();
             } catch (JSONException e) {
@@ -99,11 +118,17 @@ public class Jocket {
             }
         }
 
-        @Override
         public void onDaVinciRequestFailed(int i, String s) {
             VinciLog.e("[jocket] prepare failed, reason = " + s + ",isClosed: " + isClosed);
             disconnect(JocketCode.JOCKET_FAILED, "prepare failed", false);
         }
+    }
+
+    private String getData() {
+        long l = System.currentTimeMillis();
+        Date date = new Date(l);//new日期对象
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss", Locale.CHINA);//格式化当前时间
+        return dateFormat.format(date).trim();
     }
 
     private void sendPing() {
@@ -111,7 +136,7 @@ public class Jocket {
             return;
         }
         UUID uuid = UUID.randomUUID();
-        String url = pollingUrl + "&uuid=" + uuid;
+        String url = pollingUrl + "&uuid=" + uuid + "?time=" + getData();
         VinciLog.d("[jocket][" + mSessionId + "] do ping, url = " + url);
         DaVinci.with()
                 .getHttpRequest()
@@ -122,7 +147,7 @@ public class Jocket {
                 .doPost(url, PING_PACK, new OnDaVinciRequestListener() {
                     @Override
                     public void onDaVinciRequestSuccess(String s) {
-                        VinciLog.e("[jocket][" + mSessionId + "] ping success " + s);
+                        VinciLog.d("[jocket][" + mSessionId + "] ping success " + s);
                         if (TextUtils.isEmpty(s)) {
                             disconnect(JocketCode.JOCKET_FAILED, "ping failed", false);
                             VinciLog.e("[jocket][" + mSessionId + "] ping response is empty");
@@ -143,11 +168,11 @@ public class Jocket {
             return;
         }
         UUID uuid = UUID.randomUUID();
-        String url = pollingUrl + "&uuid=" + uuid;
+        String url = pollingUrl + "&uuid=" + uuid + "&time=" + getData();
         VinciLog.d("[jocket][" + mSessionId + "] do poll, url = " + url);
         DaVinci.with().tag("polling")
                 .getHttpRequest()
-                .timeOut(60000)
+                .timeOut(58000)
                 .maxRetries(0)
                 .headers(header)
                 .shouldCache(false)
@@ -187,7 +212,6 @@ public class Jocket {
                         mHandler.sendEmptyMessageDelayed(SEND_PING, mPingInterval);
                         break;
                     case "noop":
-
                         mHandler.sendEmptyMessageDelayed(NOOP_POLL, 5000);
                         VinciLog.d("[jocket][" + mSessionId + "] noop received");
                         break;
@@ -205,19 +229,19 @@ public class Jocket {
             }
         }
 
-        @Override
         public void onDaVinciRequestFailed(int i, String s) {
             VinciLog.e("[jocket][" + mSessionId + "] poll failed, failed reason = " + s);
             disconnect(JocketCode.JOCKET_FAILED, "poll failed", true);
         }
     }
 
-    public void close() {
-        disconnect(JocketCode.JOCKET_NORMAL, "closed by user", true);
+    public void close(String s) {
+        disconnect(JocketCode.JOCKET_NORMAL, "closed by user " + s, true);
     }
 
     private void disconnect(JocketCode code, String reason, boolean isSendClose) {
-        VinciLog.e("[jocket][" + mSessionId + "] disconnect, code = " + code.getValue() + ", reason = " + reason + ", isClosed = " + isClosed);
+        VinciLog.e("[jocket][" + mSessionId + "] disconnect, code = " + code.getValue()
+                + ", reason = " + reason + ", isClosed = " + isClosed);
         if (isClosed) {
             return;
         }
@@ -229,14 +253,14 @@ public class Jocket {
             try {
                 JSONObject data = new JSONObject();
                 data.put("code", code.getValue());
-                data.put("reason", reason);
+                data.put("message", reason);
                 jsonObject.put("type", "close");
                 jsonObject.put("data", data.toString());
             } catch (JSONException e) {
                 VinciLog.e("json assembler failed");
             }
             UUID uuid = UUID.randomUUID();
-            String url = pollingUrl + "&uuid=" + uuid;
+            String url = pollingUrl + "&uuid=" + uuid + "&time=" + getData();
             DaVinci.with()
                     .getHttpRequest()
                     .headers(header)
