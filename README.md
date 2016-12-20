@@ -1,7 +1,5 @@
-# AndroidJocket
 # Android Jocket使用文档
 
-[TOC]
 
 ## 导入方法
 
