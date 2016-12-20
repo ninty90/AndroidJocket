@@ -33,4 +33,12 @@
   jocket.connect(path, map, onJocketListener);
   ```
 
+- 实现OnJocketListener接口，并实现内部的方法。
+
+  | 方法名                                      | 作用                                   |
+  | ---------------------------------------- | ------------------------------------ |
+  | void onDisconnect(JocketCode code, String reason); | 当Jocket连接断开时，会调用。code和reason会描述断开的原因 |
+  | void onConnected();                      | Jocket连接成功调用。                        |
+  | void onReceive(String msg);              | 服务端下发消息时调用。                          |
+
 具体实现方式参考[**Jocket – Polling 工作步骤.docx**](https://github.com/ninty90/AndroidJocket/blob/master/Jocket%20%E2%80%93%20Polling%20%E5%B7%A5%E4%BD%9C%E6%AD%A5%E9%AA%A4.docx)
